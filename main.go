@@ -8,8 +8,8 @@ import (
 )
 
 func main() {
-	db := db.NewDatabase("MyDB")
-	fmt.Printf("Database created:\n%s", db)
+	database := db.NewDatabase("MyDB")
+	fmt.Printf("Database created:\n%s", database)
 	sequentialTxns := [][]string{
 		{
 			"CREATE TABLE Table1",
@@ -52,11 +52,11 @@ func main() {
 		},
 	}
 	for idx, seqTxn := range sequentialTxns {
-		err := db.ExecMultiStatementTxn(seqTxn)
+		err := database.ExecMultiStatementTxn(seqTxn)
 		if err != nil {
 			fmt.Printf("Seq txn #%d failed with error: %v", idx+1, err)
 		} else {
-			fmt.Printf("Seq txn #%d succeeded. Database after txn:\n%s", idx+1, db)
+			fmt.Printf("Seq txn #%d succeeded. Database after txn:\n%s", idx+1, database)
 		}
 	}
 	errChan := make(chan error, len(concurrentTxns))
@@ -64,7 +64,7 @@ func main() {
 		var wg sync.WaitGroup
 		for _, concTxn := range concurrentTxns {
 			wg.Go(func() {
-				err := db.ExecMultiStatementTxn(concTxn)
+				err := database.ExecMultiStatementTxn(concTxn)
 				if err != nil {
 					errChan <- err
 				}
@@ -76,5 +76,5 @@ func main() {
 	for e := range errChan {
 		fmt.Println(e)
 	}
-	fmt.Printf("Database after all sequential and concurrent txns:\n%s", db)
+	fmt.Printf("Database after all sequential and concurrent txns:\n%s", database)
 }

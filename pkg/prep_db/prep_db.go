@@ -23,7 +23,7 @@ func (pdb *PrepDB) ExecMultiStatementTxn(statements []string) error {
 	// create a multiStatementTxnDef from the txn statements. returns parsing error
 	multiStatementTxnDef, err := newMultiStatementTxnDef(statements)
 	if err != nil {
-		return fmt.Errorf("error during initial statements parsing: %v", err)
+		return fmt.Errorf("error during initial statements parsing: %w", err)
 	}
 
 	// lock the DB and validate the txn definition. The DB needs to be at
@@ -35,7 +35,7 @@ func (pdb *PrepDB) ExecMultiStatementTxn(statements []string) error {
 	err = validate(multiStatementTxnDef, pdb)
 	if err != nil {
 		dbLevelLock(unlock, pdb, multiStatementTxnDef)
-		return fmt.Errorf("error during transaction validation: %v", err)
+		return fmt.Errorf("error during transaction validation: %w", err)
 	}
 
 	// if DB write-lock is not required by the txn, while holding the DB read-lock,
@@ -146,7 +146,7 @@ func newMultiStatementTxnDef(statements []string) (*multiStatementTxnDef, error)
 		case strings.HasPrefix(statement, "CREATE TABLE"):
 			tableName, err := tableNameFromCreateStatement(statement)
 			if err != nil {
-				return nil, fmt.Errorf("error parsing statement #%d: %v", idx+1, err)
+				return nil, fmt.Errorf("error parsing statement #%d: %w", idx+1, err)
 			}
 			if txnDef.tablesToCreate.Contains(tableName) {
 				return nil, fmt.Errorf("duplicate create table requests not allowed. table name: %s", tableName)
@@ -155,7 +155,7 @@ func newMultiStatementTxnDef(statements []string) (*multiStatementTxnDef, error)
 		case strings.HasPrefix(statement, "ADD_RECORD TABLE"):
 			tableName, record, err := tableNameAndRecordFromAddRecordStatement(statement)
 			if err != nil {
-				return nil, fmt.Errorf("error parsing statement #%d: %v", idx+1, err)
+				return nil, fmt.Errorf("error parsing statement #%d: %w", idx+1, err)
 			}
 			txnDef.recordsToAppend[tableName] = append(txnDef.recordsToAppend[tableName], record)
 		default:
@@ -227,7 +227,7 @@ func tableNameAndRecordFromAddRecordStatement(statement string) (string, *record
 
 	recToAdd, err := newRecord(statementFields[3])
 	if err != nil {
-		return "", nil, fmt.Errorf("error creating new table record: %v", err)
+		return "", nil, fmt.Errorf("error creating new table record: %w", err)
 	}
 
 	return tableName, recToAdd, nil

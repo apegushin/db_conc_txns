@@ -1,4 +1,4 @@
-package prep_db
+package db
 
 import (
 	"iter"
@@ -19,8 +19,12 @@ func NewSet() *Set {
 	}
 }
 
-func (s *Set) Add(item string) {
-	s.items[item] = struct{}{}
+func (s *Set) Add(items ...string) {
+	for _, item := range items {
+		if !s.Contains(item) {
+			s.items[item] = struct{}{}
+		}
+	}
 }
 
 func (s *Set) Contains(item string) bool {

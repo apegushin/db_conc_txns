@@ -1,4 +1,4 @@
-package prep_db
+package db
 
 import (
 	"fmt"
@@ -15,7 +15,7 @@ import (
 // all statements are validated and applied atomically. if for any statement parsing or
 // validation fails, none of the statements are applied. in case of no validation
 // errors all changes are visible at once after the call to the function returns.
-func (pdb *PrepDB) ExecMultiStatementTxn(statements []string) error {
+func (d *Database) ExecMultiStatementTxn(statements []string) error {
 	if len(statements) == 0 {
 		return nil
 	}
@@ -30,45 +30,45 @@ func (pdb *PrepDB) ExecMultiStatementTxn(statements []string) error {
 	// least read-locked so that existing tables can be verified against
 	// ADD_RECORD and CREATE TABLE requests.
 	// Txn Definition determines if total txn change requires DB to be write-locked
-	dbLevelLock(lock, pdb, multiStatementTxnDef)
+	dbLevelLock(lock, d, multiStatementTxnDef)
 
-	err = validate(multiStatementTxnDef, pdb)
+	err = validate(multiStatementTxnDef, d)
 	if err != nil {
-		dbLevelLock(unlock, pdb, multiStatementTxnDef)
+		dbLevelLock(unlock, d, multiStatementTxnDef)
 		return fmt.Errorf("error during transaction validation: %w", err)
 	}
 
 	// if DB write-lock is not required by the txn, while holding the DB read-lock,
 	// acquire per-table write-locks for the add-records tables in the txn definition.
-	perTableLocks(lock, pdb, multiStatementTxnDef)
+	perTableLocks(lock, d, multiStatementTxnDef)
 
 	// with the DB and per-table locks acquired (if needed) proceed with txn execution
-	execute(multiStatementTxnDef, pdb)
+	execute(multiStatementTxnDef, d)
 
 	// txn successfully completed. unlock per-table locks, then unlock DB lock
-	perTableLocks(unlock, pdb, multiStatementTxnDef)
-	dbLevelLock(unlock, pdb, multiStatementTxnDef)
+	perTableLocks(unlock, d, multiStatementTxnDef)
+	dbLevelLock(unlock, d, multiStatementTxnDef)
 
 	return nil
 }
 
-type PrepDB struct {
+type Database struct {
 	Name   string
 	mu     sync.RWMutex
 	tables map[string]*table
 }
 
-func NewPrepDB(name string) *PrepDB {
-	return &PrepDB{
+func NewDatabase(name string) *Database {
+	return &Database{
 		Name:   name,
 		tables: make(map[string]*table),
 	}
 }
 
-func (pdb *PrepDB) String() string {
+func (d *Database) String() string {
 	res := fmt.Sprintf("DATABASE name: %s, number of tables: %d\n",
-		pdb.Name, len(pdb.tables))
-	for _, table := range pdb.tables {
+		d.Name, len(d.tables))
+	for _, table := range d.tables {
 		res += table.String()
 	}
 	return res
@@ -170,7 +170,7 @@ func newMultiStatementTxnDef(statements []string) (*multiStatementTxnDef, error)
 // The entire DB is at least read-locked, which allows to run the following validation:
 //  1. validate that tables to be created do not exist yet
 //  2. validate that ADD_RECORD requests reference existing tables or tables to be created
-func validate(m *multiStatementTxnDef, pdb *PrepDB) error {
+func validate(m *multiStatementTxnDef, pdb *Database) error {
 	for tableToCreate := range m.tablesToCreate.Items() {
 		if pdb.tableExists(tableToCreate) {
 			return fmt.Errorf("table named %s already exists", tableToCreate)
@@ -190,7 +190,7 @@ func validate(m *multiStatementTxnDef, pdb *PrepDB) error {
 // The entire DB is at least read-locked, which allows to run the following validation:
 //  1. validate that tables to be created do not exist yet
 //  2. validate that ADD_RECORD requests reference existing tables or tables to be created
-func execute(m *multiStatementTxnDef, pdb *PrepDB) {
+func execute(m *multiStatementTxnDef, pdb *Database) {
 	for tableToCreate := range m.tablesToCreate.Items() {
 		pdb.addEmptyTable(tableToCreate)
 	}
@@ -238,33 +238,33 @@ func (m *multiStatementTxnDef) requiresDbWriteLocked() bool {
 	return !m.tablesToCreate.IsEmpty()
 }
 
-func (pdb *PrepDB) tableExists(tableName string) bool {
-	_, ok := pdb.tables[tableName]
+func (d *Database) tableExists(tableName string) bool {
+	_, ok := d.tables[tableName]
 	return ok
 }
 
-func (pdb *PrepDB) addEmptyTable(tableName string) {
-	pdb.tables[tableName] = newTable(tableName)
+func (d *Database) addEmptyTable(tableName string) {
+	d.tables[tableName] = newTable(tableName)
 }
 
-func (pdb *PrepDB) rLockDB() {
-	pdb.mu.RLock()
-	fmt.Printf("READ-LOCKED DB %s\n", pdb.Name)
+func (d *Database) rLockDB() {
+	d.mu.RLock()
+	fmt.Printf("READ-LOCKED DB %s\n", d.Name)
 }
 
-func (pdb *PrepDB) rUnlockDB() {
-	pdb.mu.RUnlock()
-	fmt.Printf("READ-UNLOCKED DB %s\n", pdb.Name)
+func (d *Database) rUnlockDB() {
+	d.mu.RUnlock()
+	fmt.Printf("READ-UNLOCKED DB %s\n", d.Name)
 }
 
-func (pdb *PrepDB) lockDB() {
-	pdb.mu.Lock()
-	fmt.Printf("WRITE-LOCKED DB %s\n", pdb.Name)
+func (d *Database) lockDB() {
+	d.mu.Lock()
+	fmt.Printf("WRITE-LOCKED DB %s\n", d.Name)
 }
 
-func (pdb *PrepDB) unlockDB() {
-	pdb.mu.Unlock()
-	fmt.Printf("WRITE-UNLOCKED DB %s\n", pdb.Name)
+func (d *Database) unlockDB() {
+	d.mu.Unlock()
+	fmt.Printf("WRITE-UNLOCKED DB %s\n", d.Name)
 }
 
 func (t *table) rLockTable() {
@@ -294,7 +294,7 @@ const (
 	lock
 )
 
-func dbLevelLock(op lockOp, pdb *PrepDB, multiStatementTxnDef *multiStatementTxnDef) {
+func dbLevelLock(op lockOp, pdb *Database, multiStatementTxnDef *multiStatementTxnDef) {
 	if multiStatementTxnDef.requiresDbWriteLocked() {
 		switch op {
 		case lock:
@@ -312,7 +312,7 @@ func dbLevelLock(op lockOp, pdb *PrepDB, multiStatementTxnDef *multiStatementTxn
 	}
 }
 
-func perTableLocks(op lockOp, pdb *PrepDB, multiStatementTxnDef *multiStatementTxnDef) {
+func perTableLocks(op lockOp, pdb *Database, multiStatementTxnDef *multiStatementTxnDef) {
 	if !multiStatementTxnDef.requiresDbWriteLocked() {
 		for tableName := range maps.Keys(multiStatementTxnDef.recordsToAppend) {
 			switch op {

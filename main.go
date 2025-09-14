@@ -2,13 +2,14 @@ package main
 
 import (
 	"fmt"
-	"prep_db/pkg/prep_db"
 	"sync"
+
+	"github.com/apegushin/db_conc_txns/pkg/db"
 )
 
 func main() {
-	prepDB := prep_db.NewPrepDB("MyDB")
-	fmt.Printf("PrepDB created:\n%s", prepDB)
+	db := db.NewDatabase("MyDB")
+	fmt.Printf("Database created:\n%s", db)
 	sequentialTxns := [][]string{
 		{
 			"CREATE TABLE Table1",
@@ -51,11 +52,11 @@ func main() {
 		},
 	}
 	for idx, seqTxn := range sequentialTxns {
-		err := prepDB.ExecMultiStatementTxn(seqTxn)
+		err := db.ExecMultiStatementTxn(seqTxn)
 		if err != nil {
 			fmt.Printf("Seq txn #%d failed with error: %v", idx+1, err)
 		} else {
-			fmt.Printf("Seq txn #%d succeeded. PrepDB after txn:\n%s", idx+1, prepDB)
+			fmt.Printf("Seq txn #%d succeeded. Database after txn:\n%s", idx+1, db)
 		}
 	}
 	errChan := make(chan error, len(concurrentTxns))
@@ -63,7 +64,7 @@ func main() {
 		var wg sync.WaitGroup
 		for _, concTxn := range concurrentTxns {
 			wg.Go(func() {
-				err := prepDB.ExecMultiStatementTxn(concTxn)
+				err := db.ExecMultiStatementTxn(concTxn)
 				if err != nil {
 					errChan <- err
 				}
@@ -75,5 +76,5 @@ func main() {
 	for e := range errChan {
 		fmt.Println(e)
 	}
-	fmt.Printf("PrepDB after all sequential and concurrent txns:\n%s", prepDB)
+	fmt.Printf("Database after all sequential and concurrent txns:\n%s", db)
 }

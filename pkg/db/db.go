@@ -5,6 +5,8 @@ import (
 	"maps"
 	"strings"
 	"sync"
+
+	"github.com/apegushin/goutils/pkg/types"
 )
 
 // ExecMultiStatementTxn executes multiple statements as a single transaction (txn)
@@ -128,7 +130,7 @@ func newRecord(recordStr string) (*record, error) {
 }
 
 type multiStatementTxnDef struct {
-	tablesToCreate  *Set
+	tablesToCreate  *types.Set[string]
 	recordsToAppend map[string][]*record
 }
 
@@ -137,7 +139,7 @@ type multiStatementTxnDef struct {
 // in case of any parsing errors, returns the error and the txn will be cancelled
 func newMultiStatementTxnDef(statements []string) (*multiStatementTxnDef, error) {
 	txnDef := &multiStatementTxnDef{
-		tablesToCreate:  NewSet(),
+		tablesToCreate:  types.NewSet[string](),
 		recordsToAppend: make(map[string][]*record),
 	}
 
